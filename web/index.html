@@ -106,7 +106,7 @@ footer a { color: #666; }
 <p class="subtitle" id="subtitle"></p>
 <div class="controls">
   <label><span data-i="lang"></span> <select id="lang">
-    <option value="zh">中文 (双拼)</option>
+    <option value="zh">中文 (现代汉语常用词表)</option>
     <option value="en">English (EFF-long)</option>
   </select></label>
   <label><span data-i="words"></span> <select id="numWords">
@@ -147,6 +147,7 @@ footer a { color: #666; }
   <h2 data-i="storyTitle"></h2>
   <div class="api-row">
     <select id="provider">
+      <option value="local">Local (LM Studio / Ollama)</option>
       <option value="gemini">Gemini API</option>
       <option value="openrouter">OpenRouter</option>
     </select>
@@ -159,7 +160,7 @@ footer a { color: #666; }
   </div>
   <div class="story-box" id="storyBox" data-i="storyHint"></div>
 
-  <div class="api-row" style="margin-top: 12px;">
+  <div class="api-row" id="imageRow" style="margin-top: 12px;">
     <span data-i="imageModel"></span>
     <select id="imageModelSelect"></select>
     <button class="btn btn-secondary btn-small" id="comicBtn" disabled data-i="genComic"></button>
@@ -234,6 +235,13 @@ function applyI18n() {
 
 // --- Provider config ---
 const PROVIDERS = {
+  local: {
+    textModels: [
+      ['auto', 'Loaded model'],
+    ],
+    imageModels: [],
+    noKey: true,
+  },
   gemini: {
     textModels: [
       ['gemini-3-flash-preview', 'Gemini 3 Flash'],
@@ -273,22 +281,43 @@ function updateProviderUI() {
   };
   fillSelect('modelSelect', cfg.textModels);
   fillSelect('imageModelSelect', cfg.imageModels);
-  // swap saved API key
-  const key = localStorage.getItem(`apikey_${p}`) || '';
-  document.getElementById('apiKey').value = key;
+  // hide/show API key
+  const keyEl = document.getElementById('apiKey');
+  keyEl.style.display = cfg.noKey ? 'none' : '';
+  keyEl.value = cfg.noKey ? 'local' : (localStorage.getItem(`apikey_${p}`) || '');
+  // hide/show image row when no image models
+  document.getElementById('imageRow').style.display = cfg.imageModels.length ? '' : 'none';
 }
 
 // --- Unified API calls ---
 async function apiChat(prompt, model, withImage) {
   const provider = getProvider();
   const key = document.getElementById('apiKey').value.trim();
-  if (!key) throw new Error('API key required');
 
-  if (provider === 'gemini') {
+  if (provider === 'local') {
+    return localCall(prompt, model);
+  } else if (provider === 'gemini') {
+    if (!key) throw new Error('API key required');
     return geminiCall(prompt, model, key, withImage);
   } else {
+    if (!key) throw new Error('API key required');
     return openrouterCall(prompt, model, key, withImage);
   }
+}
+
+async function localCall(prompt, model) {
+  const url = 'http://localhost:1234/v1/chat/completions';
+  const body = { messages: [{ role: 'user', content: prompt }] };
+  if (model && model !== 'auto') body.model = model;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  console.log('Local response:', JSON.stringify(data, null, 2));
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  return { text: data.choices[0].message.content, images: [] };
 }
 
 async function geminiCall(prompt, model, key, withImage) {
@@ -474,7 +503,8 @@ function selectCandidate(el) {
   document.querySelectorAll('.candidate').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
   selectedCandidate = el._words;
-  document.getElementById('storyBtn').disabled = !document.getElementById('apiKey').value;
+  const hasKey = PROVIDERS[getProvider()].noKey || document.getElementById('apiKey').value;
+  document.getElementById('storyBtn').disabled = !hasKey;
 }
 
 // --- Story & Comic ---
@@ -575,8 +605,9 @@ document.getElementById('numWords').addEventListener('change', updateEntropy);
 document.getElementById('storyBtn').addEventListener('click', generateStory);
 document.getElementById('comicBtn').addEventListener('click', generateComic);
 document.getElementById('apiKey').addEventListener('input', () => {
-  document.getElementById('storyBtn').disabled = !document.getElementById('apiKey').value || !selectedCandidate;
-  localStorage.setItem(`apikey_${getProvider()}`, document.getElementById('apiKey').value);
+  const hasKey = PROVIDERS[getProvider()].noKey || document.getElementById('apiKey').value;
+  document.getElementById('storyBtn').disabled = !hasKey || !selectedCandidate;
+  if (!PROVIDERS[getProvider()].noKey) localStorage.setItem(`apikey_${getProvider()}`, document.getElementById('apiKey').value);
 });
 document.getElementById('provider').addEventListener('change', updateProviderUI);
 
