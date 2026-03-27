@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Passtale</title>
+<link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<link rel="manifest" href="site.webmanifest" />
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  background: #f5f5f5; color: #1a1a1a;
+  max-width: 960px; margin: 0 auto; padding: 24px 16px;
+}
+h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+.subtitle { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+.controls {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.controls label { font-size: 0.85rem; color: #555; }
+.controls select {
+  padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 0.9rem; background: #fff;
+}
+.btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  font-size: 0.95rem; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary { background: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-secondary { background: #e5e7eb; color: #374151; }
+.btn-secondary:hover { background: #d1d5db; }
+.btn-small { padding: 6px 14px; font-size: 0.8rem; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.candidate {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+  padding: 20px; margin-bottom: 16px;
+  cursor: pointer; transition: all 0.15s;
+}
+.candidate:hover { border-color: #2563eb; box-shadow: 0 0 0 2px #2563eb22; }
+.candidate.selected { border-color: #2563eb; box-shadow: 0 0 0 2px #2563eb44; background: #f0f5ff; }
+.candidate-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.candidate-label { font-size: 0.75rem; color: #999; text-transform: uppercase; letter-spacing: 0.05em; }
+.candidate-actions { display: flex; gap: 8px; }
+
+.words { display: flex; gap: 16px; flex-wrap: wrap; }
+.word-card {
+  text-align: center; padding: 12px 16px;
+  background: #fafafa; border-radius: 8px; min-width: 80px;
+}
+.word-main { font-size: 1.8rem; font-weight: 700; margin-bottom: 4px; }
+.word-pinyin { font-size: 0.8rem; color: #666; margin-bottom: 2px; }
+.word-sp { font-size: 0.8rem; color: #2563eb; font-family: "SF Mono", "Fira Code", monospace; }
+.word-homophones { font-size: 0.7rem; color: #999; margin-top: 2px; }
+
+.entropy-bar {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 12px 16px; margin-bottom: 24px;
+  font-size: 0.85rem; color: #555;
+}
+.entropy-bar strong { color: #1a1a1a; }
+
+.section { margin-top: 32px; }
+.section h2 { font-size: 1.1rem; margin-bottom: 12px; }
+
+.api-row {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;
+}
+.api-row input {
+  padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 0.85rem; flex: 1; min-width: 200px;
+}
+.api-row select {
+  padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 0.85rem; background: #fff;
+}
+
+.story-box {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 16px; margin-top: 12px; white-space: pre-wrap;
+  font-size: 0.9rem; line-height: 1.6; min-height: 60px;
+}
+.story-box.loading { color: #999; }
+.story-box.error { color: #dc2626; }
+
+.image-box { margin-top: 12px; text-align: center; }
+.image-box img { max-width: 100%; border-radius: 8px; }
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 0.75rem; color: #999; }
+footer a { color: #666; }
+</style>
+</head>
+<body>
+
+<h1>Passtale</h1>
+<p class="subtitle" id="subtitle"></p>
+<div class="controls">
+  <label><span data-i="lang"></span> <select id="lang">
+    <option value="zh">中文 (双拼)</option>
+    <option value="en">English (EFF-long)</option>
+  </select></label>
+  <label><span data-i="words"></span> <select id="numWords">
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5" selected>5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+  </select></label>
+  <label><span data-i="candidates"></span> <select id="numCandidates">
+    <option value="3">3</option>
+    <option value="5" selected>5</option>
+    <option value="8">8</option>
+  </select></label>
+  <label><span data-i="separator"></span> <select id="separator">
+    <option value=" " data-i-text="space"></option>
+    <option value="" data-i-text="none"></option>
+    <option value="-" data-i-text="dash"></option>
+    <option value="." data-i-text="dot"></option>
+    <option value="_" data-i-text="underscore"></option>
+  </select></label>
+  <button class="btn btn-primary" id="generateBtn" data-i="roll"></button>
+  <span id="meme" style="font-style:italic; color:#999; display:none">这个密码不可特意去求</span>
+</div>
+
+<div class="entropy-bar" id="entropyBar">
+  <span data-i="wordlistLabel"></span> <strong id="wlSize">-</strong> |
+  <span data-i="perWord"></span> <strong id="bitsPerWord">-</strong> bits |
+  <span id="numWordsLabel">5</span> <span data-i="wordsUnit"></span> = <strong id="totalBits">-</strong> bits
+  <span id="effEquivWrap">(~<strong id="effEquiv">-</strong> <span data-i="effWords"></span>)</span>
+</div>
+
+<div id="candidates"></div>
+
+<div class="section" id="storySection" style="display:none;">
+  <h2 data-i="storyTitle"></h2>
+  <div class="api-row">
+    <input type="password" id="apiKey" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-i-placeholder="apiKeyPlaceholder" />
+    <select id="modelSelect">
+      <option value="deepseek/deepseek-v3.2">DeepSeek V3.2</option>
+      <option value="openai/gpt-4o-mini">GPT-4o mini</option>
+      <option value="google/gemini-3-flash-preview">Gemini 3 Flash</option>
+      <option value="anthropic/claude-sonnet-4">Claude Sonnet</option>
+    </select>
+    <button class="btn btn-secondary btn-small" id="storyBtn" disabled data-i="genStory"></button>
+  </div>
+  <div class="story-box" id="storyBox" data-i="storyHint"></div>
+
+  <div class="api-row" style="margin-top: 12px;">
+    <select id="imageModelSelect">
+      <option value="google/gemini-3.1-flash-image-preview">Gemini Flash (image)</option>
+      <option value="google/gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
+    </select>
+    <button class="btn btn-secondary btn-small" id="comicBtn" disabled data-i="genComic"></button>
+  </div>
+  <div class="image-box" id="imageBox"></div>
+</div>
+
+<footer id="footer"></footer>
+
+<script src="wordlist.js"></script>
+<script src="eff_long.js"></script>
+<script>
+// --- i18n ---
+const I = {
+  zh: {
+    subtitle: '用故事记住你的密码。中文双拼或英文 EFF 词表。',
+    lang: '语言：', words: '词数：', candidates: '候选数：',
+    separator: '分隔符：', tones: '声调',
+    space: '空格', none: '无', dash: '短横线', dot: '点', underscore: '下划线',
+    roll: '摇骰子',
+    wordlistLabel: '词库：', perWord: '每词：', wordsUnit: '词', effWords: 'EFF 等效词',
+    candidate: '候选', copyCN: '复制中文', copyPinyin: '复制拼音', copySP: '复制双拼', copy: '复制',
+    copied: '已复制!',
+    storyTitle: '记忆故事', genStory: '生成故事', genComic: '生成漫画',
+    apiKeyPlaceholder: 'OpenRouter API 密钥 (sk-or-...)',
+    storyHint: '先选择一组密码，然后生成故事来帮助记忆。',
+    generating: '生成中...',
+    footer: '中文：<a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a>（2025校对版）| 英文：<a href="https://www.eff.org/dice">EFF 长词表</a> | 双拼方案：小鹤双拼',
+  },
+  en: {
+    subtitle: 'Strong passphrases with memorable stories. Chinese (Shuangpin) or English (EFF-long).',
+    lang: 'Language:', words: 'Words:', candidates: 'Candidates:',
+    separator: 'Separator:', tones: 'Tones',
+    space: 'space', none: 'none', dash: 'dash', dot: 'dot', underscore: 'underscore',
+    roll: 'Roll the Dice',
+    wordlistLabel: 'Wordlist:', perWord: 'Per word:', wordsUnit: 'words', effWords: 'EFF words',
+    candidate: 'Candidate', copyCN: 'Copy CN', copyPinyin: 'Copy Pinyin', copySP: 'Copy SP', copy: 'Copy',
+    copied: 'Copied!',
+    storyTitle: 'Mnemonic Story', genStory: 'Generate Story', genComic: 'Generate Comic',
+    apiKeyPlaceholder: 'OpenRouter API key (sk-or-...)',
+    storyHint: 'Select a passphrase above, then generate a story to help remember it.',
+    generating: 'Generating...',
+    footer: 'Chinese: <a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a> (proofread 2025) | English: <a href="https://www.eff.org/dice">EFF Long Wordlist</a> | Shuangpin: Xiaohe (小鹤双拼)',
+  },
+};
+
+function t(key) { return I[getLang()][key] || I.en[key] || key; }
+
+function applyI18n() {
+  const lang = getLang();
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('footer').innerHTML = t('footer');
+
+  document.querySelectorAll('[data-i]').forEach(el => {
+    const key = el.dataset.i;
+    if (key) el.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i-text]').forEach(el => {
+    el.textContent = t(el.dataset.iText);
+  });
+  document.querySelectorAll('[data-i-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.iPlaceholder);
+  });
+
+  if (lang !== 'zh') document.getElementById('meme').style.display = 'none';
+}
+
+// --- State ---
+const EFF_BITS = Math.log2(7776);
+let selectedCandidate = null;
+let rollTimes = [];
+
+function getLang() { return document.getElementById('lang').value; }
+function getWordlist() { return getLang() === 'zh' ? WORDLIST : EFF_LONG; }
+function getSep() { return document.getElementById('separator').value; }
+
+function init() {
+  applyI18n();
+  updateEntropy();
+  generate();
+}
+
+function updateEntropy() {
+  const n = getWordlist().length;
+  const nw = +document.getElementById('numWords').value;
+  const bpw = Math.log2(n);
+  const total = nw * bpw;
+  document.getElementById('wlSize').textContent = n.toLocaleString();
+  document.getElementById('bitsPerWord').textContent = bpw.toFixed(1);
+  document.getElementById('numWordsLabel').textContent = nw;
+  document.getElementById('totalBits').textContent = total.toFixed(1);
+  document.getElementById('effEquiv').textContent = (total / EFF_BITS).toFixed(1);
+  document.getElementById('effEquivWrap').style.display = getLang() === 'en' ? 'none' : '';
+}
+
+function pick(n) {
+  const wl = getWordlist();
+  const arr = new Uint32Array(n);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(v => wl[v % wl.length]);
+}
+
+function stripTones(py) { return py.replace(/[1-5]/g, ''); }
+
+function renderChinese(words) {
+  return words.map(w => {
+    const [sp, word, pinyin, rank, ...homophones] = w;
+    const hom = homophones.length > 0 ? `<div class="word-homophones">${homophones.join(' ')}</div>` : '';
+    return `<div class="word-card">
+      <div class="word-main">${word}</div>
+      <div class="word-pinyin">${stripTones(pinyin)}</div>
+      <div class="word-sp">${sp}</div>
+      ${hom}
+    </div>`;
+  }).join('');
+}
+
+function renderEnglish(words) {
+  return words.map(w => `<div class="word-card"><div class="word-main" style="font-size:1.4rem">${w}</div></div>`).join('');
+}
+
+function copyText(words, format) {
+  const sep = getSep();
+  let text;
+  if (getLang() === 'en') {
+    text = words.join(sep);
+  } else if (format === 'sp') {
+    text = words.map(w => w[0]).join(sep);
+  } else if (format === 'pinyin') {
+    text = words.map(w => stripTones(w[2]).replace(/ /g, '')).join(sep);
+  } else {
+    text = words.map(w => w[1]).join(sep);
+  }
+  navigator.clipboard.writeText(text);
+  return text;
+}
+
+function generate() {
+  // Easter egg: 5 clicks within 3 seconds
+  const now = Date.now();
+  rollTimes.push(now);
+  rollTimes = rollTimes.filter(t => now - t < 3000);
+  if (rollTimes.length >= 5 && getLang() === 'zh') {
+    document.getElementById('meme').style.display = '';
+  }
+
+  const lang = getLang();
+  const nw = +document.getElementById('numWords').value;
+  const nc = +document.getElementById('numCandidates').value;
+  updateEntropy();
+
+  const container = document.getElementById('candidates');
+  container.innerHTML = '';
+  const isCN = lang === 'zh';
+
+  for (let i = 0; i < nc; i++) {
+    const words = pick(nw);
+    const el = document.createElement('div');
+    el.className = 'candidate';
+
+    const copyButtons = isCN
+      ? `<button class="btn btn-secondary btn-small copy-btn" data-fmt="cn">${t('copyCN')}</button>
+         <button class="btn btn-secondary btn-small copy-btn" data-fmt="pinyin">${t('copyPinyin')}</button>
+         <button class="btn btn-secondary btn-small copy-btn" data-fmt="sp">${t('copySP')}</button>`
+      : `<button class="btn btn-secondary btn-small copy-btn" data-fmt="en">${t('copy')}</button>`;
+
+    el.innerHTML = `
+      <div class="candidate-header">
+        <span class="candidate-label">${t('candidate')} ${i + 1}</span>
+        <div class="candidate-actions">${copyButtons}</div>
+      </div>
+      <div class="words">${isCN ? renderChinese(words) : renderEnglish(words)}</div>
+    `;
+    el._words = words;
+    el.addEventListener('click', () => selectCandidate(el));
+    el.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyText(words, btn.dataset.fmt);
+        const orig = btn.textContent;
+        btn.textContent = t('copied');
+        setTimeout(() => btn.textContent = orig, 1500);
+      });
+    });
+    container.appendChild(el);
+  }
+
+  document.getElementById('storySection').style.display = 'block';
+  selectedCandidate = null;
+  document.getElementById('storyBtn').disabled = true;
+  document.getElementById('comicBtn').disabled = true;
+  document.getElementById('storyBox').textContent = t('storyHint');
+  document.getElementById('storyBox').className = 'story-box';
+  document.getElementById('imageBox').innerHTML = '';
+}
+
+function selectCandidate(el) {
+  document.querySelectorAll('.candidate').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedCandidate = el._words;
+  document.getElementById('storyBtn').disabled = !document.getElementById('apiKey').value;
+}
+
+// --- OpenRouter ---
+async function generateStory() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key || !selectedCandidate) return;
+
+  const lang = getLang();
+  const model = document.getElementById('modelSelect').value;
+  const box = document.getElementById('storyBox');
+  box.className = 'story-box loading';
+  box.textContent = t('generating');
+  document.getElementById('storyBtn').disabled = true;
+
+  const prompt = lang === 'zh'
+    ? `我需要按顺序记住这几个词：${selectedCandidate.map(w => w[1]).join('、')}\n\n请编一个短小、荒诞、好记的故事（2-3句话），把这些词严格按上述顺序串起来，不可调换顺序。只用中文，不要翻译。`
+    : `I need to memorize these words in order: ${selectedCandidate.join(', ')}\n\nCreate a short, absurd, memorable story (2-3 sentences) linking these words IN ORDER. Keep it vivid and funny.`;
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.href },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    box.className = 'story-box';
+    box.innerHTML = renderMarkdown(data.choices[0].message.content);
+    document.getElementById('comicBtn').disabled = false;
+  } catch (e) {
+    box.className = 'story-box error';
+    box.textContent = `Error: ${e.message}`;
+  }
+  document.getElementById('storyBtn').disabled = false;
+}
+
+async function generateComic() {
+  const key = document.getElementById('apiKey').value.trim();
+  const story = document.getElementById('storyBox').textContent;
+  if (!key || !story || !selectedCandidate) return;
+
+  const lang = getLang();
+  const model = document.getElementById('imageModelSelect').value;
+  const words = lang === 'zh' ? selectedCandidate.map(w => w[1]).join(' ') : selectedCandidate.join(' ');
+
+  const imgBox = document.getElementById('imageBox');
+  imgBox.innerHTML = `<p style="color:#999">${t('generating')}</p>`;
+  document.getElementById('comicBtn').disabled = true;
+
+  const prompt = `Generate an image: a comic-strip illustration for this mnemonic story about the words: ${words}.\n\nStory: ${story}\n\nStyle: Simple, colorful, 4-panel comic strip. Each panel depicts one part of the story.`;
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.href },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'] }),
+    });
+    const data = await resp.json();
+    console.log('Comic response:', JSON.stringify(data, null, 2));
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+    const msg = data.choices[0].message;
+    const images = extractImages(msg);
+    let html = '';
+    if (msg.content) html += `<div class="story-box" style="margin-bottom:12px">${escapeHtml(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content))}</div>`;
+    if (images.length > 0) html += images.map(src => `<img src="${src}" alt="Comic" />`).join('');
+    if (!images.length && !msg.content) html = `<div class="story-box">No image returned. Check console.</div>`;
+    imgBox.innerHTML = html;
+  } catch (e) {
+    imgBox.innerHTML = `<p class="story-box error">Error: ${e.message}</p>`;
+  }
+  document.getElementById('comicBtn').disabled = false;
+}
+
+// --- Helpers ---
+function extractImages(msg) {
+  const images = [];
+  if (Array.isArray(msg.images)) {
+    for (const img of msg.images) {
+      if (img.image_url?.url) images.push(img.image_url.url);
+      if (img.url) images.push(img.url);
+    }
+  }
+  const c = msg.content;
+  if (Array.isArray(c)) {
+    for (const p of c) {
+      if (p.type === 'image_url' && p.image_url?.url) images.push(p.image_url.url);
+      if (p.type === 'image' && p.source?.data) images.push(`data:${p.source.media_type || 'image/png'};base64,${p.source.data}`);
+      if (p.inline_data?.data) images.push(`data:${p.inline_data.mime_type || 'image/png'};base64,${p.inline_data.data}`);
+    }
+  }
+  if (typeof c === 'string') { const m = c.match(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/g); if (m) images.push(...m); }
+  return images;
+}
+
+function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderMarkdown(s) {
+  return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/\n/g, '<br>');
+}
+
+// --- Events ---
+document.getElementById('generateBtn').addEventListener('click', generate);
+document.getElementById('lang').addEventListener('change', () => { applyI18n(); updateEntropy(); generate(); });
+document.getElementById('numWords').addEventListener('change', updateEntropy);
+document.getElementById('storyBtn').addEventListener('click', generateStory);
+document.getElementById('comicBtn').addEventListener('click', generateComic);
+document.getElementById('apiKey').addEventListener('input', () => {
+  document.getElementById('storyBtn').disabled = !document.getElementById('apiKey').value || !selectedCandidate;
+  localStorage.setItem('openrouter_key', document.getElementById('apiKey').value);
+});
+
+const savedKey = localStorage.getItem('openrouter_key');
+if (savedKey) document.getElementById('apiKey').value = savedKey;
+
+init();
+</script>
+</body>
+</html>

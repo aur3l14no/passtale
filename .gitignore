@@ -1,0 +1,11 @@
+# Rust build
+/wordlist-gen/target
+/wordlist-gen/common_words.txt
+
+# Generated outputs (regenerate with: cd wordlist-gen && cargo run --release)
+/wordlist.txt
+/shuangpin.wordlist
+/sankey.html
+
+# Web wordlist is generated but checked in for the web app to work standalone
+# /web/wordlist.js
