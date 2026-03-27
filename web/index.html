@@ -189,7 +189,7 @@ const I = {
     storyHint: '先选择一组密码，然后生成故事来帮助记忆。',
     generating: '生成中...',
     equivTip: '密码强度相当于随机密码',
-    footer: '中文：<a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a>（2025校对版）| 英文：<a href="https://www.eff.org/dice">EFF 长词表</a> | 双拼方案：小鹤双拼',
+    footer: '中文：<a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a>（<a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">liuxilu</a> 校对版）| 英文：<a href="https://www.eff.org/dice">EFF 长词表</a> | 双拼方案：小鹤双拼',
   },
   en: {
     subtitle: 'Strong passphrases with memorable stories. Chinese (Shuangpin) or English (EFF-long).',
@@ -206,7 +206,7 @@ const I = {
     storyHint: 'Select a passphrase above, then generate a story to help remember it.',
     generating: 'Generating...',
     equivTip: 'Equivalent strength to random password',
-    footer: 'Chinese: <a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a> (proofread 2025) | English: <a href="https://www.eff.org/dice">EFF Long Wordlist</a> | Shuangpin: Xiaohe (小鹤双拼)',
+    footer: 'Chinese: <a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a> (proofread by <a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">liuxilu</a>) | English: <a href="https://www.eff.org/dice">EFF Long Wordlist</a> | Shuangpin: Xiaohe (小鹤双拼)',
   },
 };
 
@@ -521,7 +521,7 @@ async function generateComic() {
   try {
     const result = await apiChat(prompt, model, true);
     imgBox.innerHTML = '';
-    if (result.text) {
+    if (result.text && !result.images.length) {
       const d = document.createElement('div');
       d.className = 'story-box'; d.style.marginBottom = '12px';
       d.textContent = result.text;
