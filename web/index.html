@@ -146,22 +146,22 @@ footer a { color: #666; }
 <div class="section" id="storySection" style="display:none;">
   <h2 data-i="storyTitle"></h2>
   <div class="api-row">
-    <input type="password" id="apiKey" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-i-placeholder="apiKeyPlaceholder" />
-    <select id="modelSelect">
-      <option value="deepseek/deepseek-v3.2">DeepSeek V3.2</option>
-      <option value="openai/gpt-4o-mini">GPT-4o mini</option>
-      <option value="google/gemini-3-flash-preview">Gemini 3 Flash</option>
-      <option value="anthropic/claude-sonnet-4">Claude Sonnet</option>
+    <select id="provider">
+      <option value="gemini">Gemini API</option>
+      <option value="openrouter">OpenRouter</option>
     </select>
+    <input type="password" id="apiKey" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-i-placeholder="apiKeyPlaceholder" />
+  </div>
+  <div class="api-row">
+    <span data-i="textModel"></span>
+    <select id="modelSelect"></select>
     <button class="btn btn-secondary btn-small" id="storyBtn" disabled data-i="genStory"></button>
   </div>
   <div class="story-box" id="storyBox" data-i="storyHint"></div>
 
   <div class="api-row" style="margin-top: 12px;">
-    <select id="imageModelSelect">
-      <option value="google/gemini-3.1-flash-image-preview">Gemini Flash (image)</option>
-      <option value="google/gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
-    </select>
+    <span data-i="imageModel"></span>
+    <select id="imageModelSelect"></select>
     <button class="btn btn-secondary btn-small" id="comicBtn" disabled data-i="genComic"></button>
   </div>
   <div class="image-box" id="imageBox"></div>
@@ -184,7 +184,8 @@ const I = {
     candidate: '候选', copyCN: '复制中文', copyPinyin: '复制拼音', copySP: '复制双拼', copy: '复制',
     copied: '已复制!',
     storyTitle: '妙妙小故事', genStory: '生成故事', genComic: '生成漫画',
-    apiKeyPlaceholder: 'OpenRouter API 密钥 (sk-or-...)',
+    textModel: '文本：', imageModel: '图片：',
+    apiKeyPlaceholder: 'API 密钥',
     storyHint: '先选择一组密码，然后生成故事来帮助记忆。',
     generating: '生成中...',
     equivTip: '密码强度相当于随机密码',
@@ -200,7 +201,8 @@ const I = {
     candidate: 'Candidate', copyCN: 'Copy CN', copyPinyin: 'Copy Pinyin', copySP: 'Copy SP', copy: 'Copy',
     copied: 'Copied!',
     storyTitle: 'Mnemonic Story', genStory: 'Generate Story', genComic: 'Generate Comic',
-    apiKeyPlaceholder: 'OpenRouter API key (sk-or-...)',
+    textModel: 'Text:', imageModel: 'Image:',
+    apiKeyPlaceholder: 'API key',
     storyHint: 'Select a passphrase above, then generate a story to help remember it.',
     generating: 'Generating...',
     equivTip: 'Equivalent strength to random password',
@@ -230,6 +232,106 @@ function applyI18n() {
   if (lang !== 'zh') document.getElementById('meme').style.display = 'none';
 }
 
+// --- Provider config ---
+const PROVIDERS = {
+  gemini: {
+    textModels: [
+      ['gemini-3-flash-preview', 'Gemini 3 Flash'],
+      ['gemini-2.5-flash', 'Gemini 2.5 Flash'],
+    ],
+    imageModels: [
+      ['gemini-3.1-flash-image-preview', 'Gemini 3.1 Flash (image)'],
+    ],
+  },
+  openrouter: {
+    textModels: [
+      ['deepseek/deepseek-v3.2', 'DeepSeek V3.2'],
+      ['openai/gpt-4o-mini', 'GPT-4o mini'],
+      ['google/gemini-3-flash-preview', 'Gemini 3 Flash'],
+      ['anthropic/claude-sonnet-4', 'Claude Sonnet'],
+    ],
+    imageModels: [
+      ['openai/gpt-5-image-mini', 'GPT-5 Image Mini'],
+      ['google/gemini-3.1-flash-image-preview', 'Gemini Flash (image)'],
+    ],
+  },
+};
+
+function getProvider() { return document.getElementById('provider').value; }
+
+function updateProviderUI() {
+  const p = getProvider();
+  const cfg = PROVIDERS[p];
+  const fillSelect = (id, opts) => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '';
+    for (const [val, label] of opts) {
+      const o = document.createElement('option');
+      o.value = val; o.textContent = label;
+      sel.appendChild(o);
+    }
+  };
+  fillSelect('modelSelect', cfg.textModels);
+  fillSelect('imageModelSelect', cfg.imageModels);
+  // swap saved API key
+  const key = localStorage.getItem(`apikey_${p}`) || '';
+  document.getElementById('apiKey').value = key;
+}
+
+// --- Unified API calls ---
+async function apiChat(prompt, model, withImage) {
+  const provider = getProvider();
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) throw new Error('API key required');
+
+  if (provider === 'gemini') {
+    return geminiCall(prompt, model, key, withImage);
+  } else {
+    return openrouterCall(prompt, model, key, withImage);
+  }
+}
+
+async function geminiCall(prompt, model, key, withImage) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const body = { contents: [{ parts: [{ text: prompt }] }] };
+  if (withImage) {
+    body.generationConfig = { responseModalities: ['TEXT', 'IMAGE'] };
+  }
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  console.log('Gemini response:', JSON.stringify(data, null, 2));
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const text = parts.filter(p => p.text).map(p => p.text).join('\n');
+  const images = parts.filter(p => p.inlineData).map(p =>
+    `data:${p.inlineData.mimeType || 'image/png'};base64,${p.inlineData.data}`
+  );
+  return { text, images };
+}
+
+async function openrouterCall(prompt, model, key, withImage) {
+  const body = { model, messages: [{ role: 'user', content: prompt }] };
+  if (withImage) body.modalities = ['image', 'text'];
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.href },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json();
+  console.log('OpenRouter response:', JSON.stringify(data, null, 2));
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+
+  const msg = data.choices[0].message;
+  const text = typeof msg.content === 'string' ? msg.content : '';
+  const images = extractImages(msg);
+  return { text, images };
+}
+
 // --- State ---
 const EFF_BITS = Math.log2(7776);
 let selectedCandidate = null;
@@ -240,6 +342,7 @@ function getWordlist() { return getLang() === 'zh' ? WORDLIST : EFF_LONG; }
 function getSep() { return document.getElementById('separator').value; }
 
 function init() {
+  updateProviderUI();
   applyI18n();
   updateEntropy();
   generate();
@@ -374,10 +477,9 @@ function selectCandidate(el) {
   document.getElementById('storyBtn').disabled = !document.getElementById('apiKey').value;
 }
 
-// --- OpenRouter ---
+// --- Story & Comic ---
 async function generateStory() {
-  const key = document.getElementById('apiKey').value.trim();
-  if (!key || !selectedCandidate) return;
+  if (!document.getElementById('apiKey').value.trim() || !selectedCandidate) return;
 
   const lang = getLang();
   const model = document.getElementById('modelSelect').value;
@@ -391,15 +493,9 @@ async function generateStory() {
     : `I need to memorize these words in order: ${selectedCandidate.join(', ')}\n\nCreate a short, absurd, memorable story (2-3 sentences) linking these words IN ORDER. Keep it vivid and funny.`;
 
   try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.href },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] }),
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    const result = await apiChat(prompt, model, false);
     box.className = 'story-box';
-    box.innerHTML = renderMarkdown(data.choices[0].message.content);
+    box.innerHTML = renderMarkdown(result.text);
     document.getElementById('comicBtn').disabled = false;
   } catch (e) {
     box.className = 'story-box error';
@@ -409,9 +505,8 @@ async function generateStory() {
 }
 
 async function generateComic() {
-  const key = document.getElementById('apiKey').value.trim();
   const story = document.getElementById('storyBox').textContent;
-  if (!key || !story || !selectedCandidate) return;
+  if (!document.getElementById('apiKey').value.trim() || !story || !selectedCandidate) return;
 
   const lang = getLang();
   const model = document.getElementById('imageModelSelect').value;
@@ -424,34 +519,20 @@ async function generateComic() {
   const prompt = `Generate an image: a comic-strip illustration for this mnemonic story about the words: ${words}.\n\nStory: ${story}\n\nStyle: Simple, colorful, 4-panel comic strip. Each panel depicts one part of the story.`;
 
   try {
-    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.href },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'], provider: { order: ['Google AI Studio'] } }),
-    });
-    const data = await resp.json();
-    console.log('Comic response:', JSON.stringify(data, null, 2));
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-
-    const msg = data.choices[0].message;
-    const images = extractImages(msg);
+    const result = await apiChat(prompt, model, true);
     imgBox.innerHTML = '';
-    if (msg.content) {
+    if (result.text) {
       const d = document.createElement('div');
-      d.className = 'story-box';
-      d.style.marginBottom = '12px';
-      d.textContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      d.className = 'story-box'; d.style.marginBottom = '12px';
+      d.textContent = result.text;
       imgBox.appendChild(d);
     }
-    if (images.length > 0) {
-      for (const src of images) {
-        const img = document.createElement('img');
-        img.src = src;
-        img.alt = 'Comic';
-        imgBox.appendChild(img);
-      }
+    for (const src of result.images) {
+      const img = document.createElement('img');
+      img.src = src; img.alt = 'Comic';
+      imgBox.appendChild(img);
     }
-    if (!images.length && !msg.content) {
+    if (!result.images.length && !result.text) {
       imgBox.innerHTML = `<div class="story-box">No image returned. Check console.</div>`;
     }
   } catch (e) {
@@ -495,11 +576,9 @@ document.getElementById('storyBtn').addEventListener('click', generateStory);
 document.getElementById('comicBtn').addEventListener('click', generateComic);
 document.getElementById('apiKey').addEventListener('input', () => {
   document.getElementById('storyBtn').disabled = !document.getElementById('apiKey').value || !selectedCandidate;
-  localStorage.setItem('openrouter_key', document.getElementById('apiKey').value);
+  localStorage.setItem(`apikey_${getProvider()}`, document.getElementById('apiKey').value);
 });
-
-const savedKey = localStorage.getItem('openrouter_key');
-if (savedKey) document.getElementById('apiKey').value = savedKey;
+document.getElementById('provider').addEventListener('change', updateProviderUI);
 
 init();
 </script>
