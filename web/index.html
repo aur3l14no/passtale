@@ -138,6 +138,7 @@ footer a { color: #666; }
   <span data-i="perWord"></span> <strong id="bitsPerWord">-</strong> bits |
   <span id="numWordsLabel">5</span> <span data-i="wordsUnit"></span> = <strong id="totalBits">-</strong> bits
   <span id="effEquivWrap">(~<strong id="effEquiv">-</strong> <span data-i="effWords"></span>)</span>
+  <br><span data-i="equivTip"></span> <strong><code id="equivPassword" style="font-size:0.9em"></code></strong>
 </div>
 
 <div id="candidates"></div>
@@ -186,6 +187,7 @@ const I = {
     apiKeyPlaceholder: 'OpenRouter API 密钥 (sk-or-...)',
     storyHint: '先选择一组密码，然后生成故事来帮助记忆。',
     generating: '生成中...',
+    equivTip: '密码强度相当于随机密码',
     footer: '中文：<a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a>（2025校对版）| 英文：<a href="https://www.eff.org/dice">EFF 长词表</a> | 双拼方案：小鹤双拼',
   },
   en: {
@@ -201,6 +203,7 @@ const I = {
     apiKeyPlaceholder: 'OpenRouter API key (sk-or-...)',
     storyHint: 'Select a passphrase above, then generate a story to help remember it.',
     generating: 'Generating...',
+    equivTip: 'Equivalent strength to random password',
     footer: 'Chinese: <a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a> (proofread 2025) | English: <a href="https://www.eff.org/dice">EFF Long Wordlist</a> | Shuangpin: Xiaohe (小鹤双拼)',
   },
 };
@@ -253,6 +256,14 @@ function updateEntropy() {
   document.getElementById('totalBits').textContent = total.toFixed(1);
   document.getElementById('effEquiv').textContent = (total / EFF_BITS).toFixed(1);
   document.getElementById('effEquivWrap').style.display = getLang() === 'en' ? 'none' : '';
+  // Generate equivalent random password for comparison
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+';
+  const bitsPerChar = Math.log2(charset.length);
+  const pwLen = Math.ceil(total / bitsPerChar);
+  const arr = new Uint32Array(pwLen);
+  crypto.getRandomValues(arr);
+  const pw = Array.from(arr).map(v => charset[v % charset.length]).join('');
+  document.getElementById('equivPassword').textContent = pw;
 }
 
 function pick(n) {
@@ -416,7 +427,7 @@ async function generateComic() {
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'HTTP-Referer': window.location.href },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'] }),
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'], provider: { order: ['Google AI Studio'] } }),
     });
     const data = await resp.json();
     console.log('Comic response:', JSON.stringify(data, null, 2));
@@ -424,11 +435,25 @@ async function generateComic() {
 
     const msg = data.choices[0].message;
     const images = extractImages(msg);
-    let html = '';
-    if (msg.content) html += `<div class="story-box" style="margin-bottom:12px">${escapeHtml(typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content))}</div>`;
-    if (images.length > 0) html += images.map(src => `<img src="${src}" alt="Comic" />`).join('');
-    if (!images.length && !msg.content) html = `<div class="story-box">No image returned. Check console.</div>`;
-    imgBox.innerHTML = html;
+    imgBox.innerHTML = '';
+    if (msg.content) {
+      const d = document.createElement('div');
+      d.className = 'story-box';
+      d.style.marginBottom = '12px';
+      d.textContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      imgBox.appendChild(d);
+    }
+    if (images.length > 0) {
+      for (const src of images) {
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = 'Comic';
+        imgBox.appendChild(img);
+      }
+    }
+    if (!images.length && !msg.content) {
+      imgBox.innerHTML = `<div class="story-box">No image returned. Check console.</div>`;
+    }
   } catch (e) {
     imgBox.innerHTML = `<p class="story-box error">Error: ${e.message}</p>`;
   }
