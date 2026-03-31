@@ -214,17 +214,9 @@ fn to_xiaohe(raw: &str) -> Option<[char; 2]> {
     if rest.is_empty() { return None; }
 
     let fin: &str = match ik {
-        'y' => match rest {
-            "i"=>"i","a"=>"ia","e"=>"ie","ao"=>"iao","ou"=>"iu","an"=>"ian","in"=>"in",
-            "ang"=>"iang","ing"=>"ing","ong"=>"iong","u"|"v"=>"v","ue"|"ve"=>"ve",
-            "uan"|"van"=>"van","un"|"vn"=>"vn", _ => return None,
-        },
         'w' => match rest {
-            "u"=>"u","a"=>"ua","o"=>"uo","ai"=>"uai","ei"=>"ui","an"=>"uan",
-            "en"=>"un","ang"=>"uang","eng"=>"eng", _ => return None,
-        },
-        'j'|'q'|'x' => match rest {
-            "u"|"v"=>"v","ue"|"ve"=>"ve","uan"|"van"=>"van","un"|"vn"=>"vn", _ => rest,
+            "u"|"a"|"o"|"ai"|"ei"|"an"|"en"|"ang"|"eng" => rest,
+            _ => return None,
         },
         _ => rest,
     };

@@ -166,6 +166,16 @@ footer a { color: #666; }
     <button class="btn btn-secondary btn-small" id="comicBtn" disabled data-i="genComic"></button>
   </div>
   <div class="image-box" id="imageBox"></div>
+
+  <details style="margin-top: 12px;">
+    <summary style="cursor: pointer; font-size: 0.85rem; color: #666;" data-i="customizePrompts"></summary>
+    <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+      <label style="font-size: 0.8rem; color: #555;"><span data-i="storyPromptLabel"></span> (<code>{{words}}</code>)</label>
+      <textarea id="storyPrompt" rows="4" style="width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem; resize: vertical; font-family: inherit;"></textarea>
+      <label style="font-size: 0.8rem; color: #555;"><span data-i="comicPromptLabel"></span> (<code>{{words}}</code> <code>{{story}}</code>)</label>
+      <textarea id="comicPrompt" rows="4" style="width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem; resize: vertical; font-family: inherit;"></textarea>
+    </div>
+  </details>
 </div>
 
 <footer id="footer"></footer>
@@ -189,6 +199,7 @@ const I = {
     apiKeyPlaceholder: 'API 密钥',
     storyHint: '先选择一组密码，然后生成故事来帮助记忆。',
     generating: '生成中...',
+    customizePrompts: '自定义提示词', storyPromptLabel: '故事提示词', comicPromptLabel: '漫画提示词',
     equivTip: '密码强度相当于随机密码',
     footer: '中文：<a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a>（<a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">liuxilu</a> 校对版）| 英文：<a href="https://www.eff.org/dice">EFF 长词表</a> | 双拼方案：小鹤双拼',
   },
@@ -206,6 +217,7 @@ const I = {
     apiKeyPlaceholder: 'API key',
     storyHint: 'Select a passphrase above, then generate a story to help remember it.',
     generating: 'Generating...',
+    customizePrompts: 'Customize prompts', storyPromptLabel: 'Story prompt', comicPromptLabel: 'Comic prompt',
     equivTip: 'Equivalent strength to random password',
     footer: 'Chinese: <a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">现代汉语常用词表</a> (proofread by <a href="https://github.com/liuxilu/Proofread-Modern-Chinese-Common-Lexicon">liuxilu</a>) | English: <a href="https://www.eff.org/dice">EFF Long Wordlist</a> | Shuangpin: Xiaohe (小鹤双拼)',
   },
@@ -264,6 +276,30 @@ const PROVIDERS = {
     ],
   },
 };
+
+const DEFAULT_PROMPTS = {
+  zh: {
+    story: '我需要按顺序记住这几个词：{{words}}\n\n请编一个短小、荒诞、好记的故事（2-3句话），把这些词严格按上述顺序串起来，不可调换顺序。只用中文，不要翻译。',
+    comic: 'Generate an image: a comic-strip illustration for this mnemonic story about the words: {{words}}.\n\nStory: {{story}}\n\nStyle: Simple, colorful, 4-panel comic strip. Each panel depicts one part of the story.',
+  },
+  en: {
+    story: 'I need to memorize these words in order: {{words}}\n\nCreate a short, absurd, memorable story (2-3 sentences) linking these words IN ORDER. Keep it vivid and funny.',
+    comic: 'Generate an image: a comic-strip illustration for this mnemonic story about the words: {{words}}.\n\nStory: {{story}}\n\nStyle: Simple, colorful, 4-panel comic strip. Each panel depicts one part of the story.',
+  },
+};
+
+function getWordsString() {
+  if (!selectedCandidate) return '';
+  return getLang() === 'zh'
+    ? selectedCandidate.map(w => w[1]).join('、')
+    : selectedCandidate.join(', ');
+}
+
+function initPromptTemplates() {
+  const defaults = DEFAULT_PROMPTS[getLang()];
+  document.getElementById('storyPrompt').value = defaults.story;
+  document.getElementById('comicPrompt').value = defaults.comic;
+}
 
 function getProvider() { return document.getElementById('provider').value; }
 
@@ -373,6 +409,7 @@ function getSep() { return document.getElementById('separator').value; }
 function init() {
   updateProviderUI();
   applyI18n();
+  initPromptTemplates();
   updateEntropy();
   generate();
 }
@@ -511,16 +548,15 @@ function selectCandidate(el) {
 async function generateStory() {
   if (!document.getElementById('apiKey').value.trim() || !selectedCandidate) return;
 
-  const lang = getLang();
   const model = document.getElementById('modelSelect').value;
   const box = document.getElementById('storyBox');
   box.className = 'story-box loading';
   box.textContent = t('generating');
   document.getElementById('storyBtn').disabled = true;
 
-  const prompt = lang === 'zh'
-    ? `我需要按顺序记住这几个词：${selectedCandidate.map(w => w[1]).join('、')}\n\n请编一个短小、荒诞、好记的故事（2-3句话），把这些词严格按上述顺序串起来，不可调换顺序。只用中文，不要翻译。`
-    : `I need to memorize these words in order: ${selectedCandidate.join(', ')}\n\nCreate a short, absurd, memorable story (2-3 sentences) linking these words IN ORDER. Keep it vivid and funny.`;
+  const wordsStr = getWordsString();
+  const template = document.getElementById('storyPrompt').value;
+  const prompt = template.replace(/\{\{words\}\}/g, wordsStr);
 
   try {
     const result = await apiChat(prompt, model, false);
@@ -538,15 +574,15 @@ async function generateComic() {
   const story = document.getElementById('storyBox').textContent;
   if (!document.getElementById('apiKey').value.trim() || !story || !selectedCandidate) return;
 
-  const lang = getLang();
   const model = document.getElementById('imageModelSelect').value;
-  const words = lang === 'zh' ? selectedCandidate.map(w => w[1]).join(' ') : selectedCandidate.join(' ');
+  const wordsStr = getWordsString();
 
   const imgBox = document.getElementById('imageBox');
   imgBox.innerHTML = `<p style="color:#999">${t('generating')}</p>`;
   document.getElementById('comicBtn').disabled = true;
 
-  const prompt = `Generate an image: a comic-strip illustration for this mnemonic story about the words: ${words}.\n\nStory: ${story}\n\nStyle: Simple, colorful, 4-panel comic strip. Each panel depicts one part of the story.`;
+  const comicTemplate = document.getElementById('comicPrompt').value;
+  const prompt = comicTemplate.replace(/\{\{words\}\}/g, wordsStr).replace(/\{\{story\}\}/g, story);
 
   try {
     const result = await apiChat(prompt, model, true);
@@ -600,7 +636,7 @@ function renderMarkdown(s) {
 
 // --- Events ---
 document.getElementById('generateBtn').addEventListener('click', generate);
-document.getElementById('lang').addEventListener('change', () => { applyI18n(); updateEntropy(); generate(); });
+document.getElementById('lang').addEventListener('change', () => { applyI18n(); initPromptTemplates(); updateEntropy(); generate(); });
 document.getElementById('numWords').addEventListener('change', updateEntropy);
 document.getElementById('storyBtn').addEventListener('click', generateStory);
 document.getElementById('comicBtn').addEventListener('click', generateComic);
